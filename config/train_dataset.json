@@ -1,0 +1,9 @@
+{
+  "dataset_path": "../dataset/train.csv",
+  "img_res": 224,
+  "sample_rate": 16000,
+  "seq_len": 32,
+  "stride": 50,
+  "num_split": 10,
+  "output_path": "../dataset/train_set"
+}

@@ -1,0 +1,6 @@
+{
+  "video_path": "../Aff-Wild2/video",
+  "image_path": "../Aff-Wild2/aligned",
+  "label_path": "../Aff-Wild2/label/EXPR_Recognition_Challenge",
+  "output_path": "../dataset"
+}
