@@ -18,7 +18,7 @@ def extract_frames(image_path: str):
                 continue
             image.append(Image.open(os.path.join(root, file)).convert('RGB'))
             img_idx.append(int(file.split('.')[0]))
-    return image, img_idx
+    return image, sorted(img_idx)
 
 
 def extract_audio(video_path: str, sampling_rate: int = 16000):
@@ -48,10 +48,9 @@ def mel_filters(n_mels: int = N_MELS) -> torch.Tensor:
 
 
 def log_mel_spectrogram(
-    audio: np.ndarray,
-    n_mels: int = 80
+        audio: np.ndarray,
+        n_mels: int = 80
 ):
-
     window = torch.hann_window(N_FFT)
     stft = torch.stft(audio, N_FFT, HOP_LENGTH, window=window, return_complex=True)
     magnitudes = stft[..., :-1].abs() ** 2
@@ -82,6 +81,7 @@ if __name__ == '__main__':
         print(sample['video_path'])
         image, img_idx = extract_frames(sample['image_path'])
         audio = extract_audio(sample['video_path'], sample_rate)
+        total_audio = len(audio)
         label = extract_label(sample['label_path'])
         fps = sample['fps']
         total_frames = sample['total_frame']
@@ -89,11 +89,10 @@ if __name__ == '__main__':
             start = img_idx[i]
             end = img_idx[i + seq_len - 1]
             imgs_sample = image[i: i + seq_len]
-            audio_sample = audio[int((start - 1) * (sample_rate // fps)): int(end * (sample_rate // fps))]
+            audio_sample = audio[
+                           int((start - 1) * (total_audio // total_frames)): int(end * (total_audio // total_frames))]
             audio_sample = log_mel_spectrogram(torch.Tensor(audio_sample))
             label_sample = [label[x - 1] for x in img_idx[i: i + seq_len]]
             torch.save(({"video": imgs_sample, "audio": audio_sample, "label": label_sample}),
                        os.path.join(config["output_path"], f"{count}.pth"))
             count += 1
-            break
-        break

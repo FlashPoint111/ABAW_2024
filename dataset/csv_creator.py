@@ -30,13 +30,14 @@ def main():
         for file in files:
             if '.DS_Store' in file:
                 continue
+            subset = 'Train_Set' if 'Train_Set' in root else 'Validation_Set'
             if 'left' in file or 'right' in file:
                 video_split(train_set, valid_set, os.path.join(video_path, file.split('_')[0]),
-                            os.path.join(image_path, file.split('.')[0]), root.split('\\')[-1],
+                            os.path.join(image_path, file.split('.')[0]), subset,
                             os.path.join(root, file))
             else:
                 video_split(train_set, valid_set, os.path.join(video_path, file.split('.')[0]),
-                            os.path.join(image_path, file.split('.')[0]), root.split('\\')[-1],
+                            os.path.join(image_path, file.split('.')[0]), subset,
                             os.path.join(root, file))
 
     train_set.to_csv(os.path.join(output_path, 'train.csv'), index=False, encoding='utf-8')
