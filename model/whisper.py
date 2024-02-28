@@ -1,13 +1,10 @@
-import base64
-import gzip
 from dataclasses import dataclass
-from typing import Dict, Iterable, Optional
+from typing import Iterable, Optional
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
-
 from torchsummary import summary
 
 
@@ -41,7 +38,7 @@ class Linear(nn.Linear):
 
 class Conv1d(nn.Conv1d):
     def _conv_forward(
-        self, x: Tensor, weight: Tensor, bias: Optional[Tensor]
+            self, x: Tensor, weight: Tensor, bias: Optional[Tensor]
     ) -> Tensor:
         return super()._conv_forward(
             x, weight.to(x.dtype), None if bias is None else bias.to(x.dtype)
@@ -67,11 +64,11 @@ class MultiHeadAttention(nn.Module):
         self.out = Linear(n_state, n_state)
 
     def forward(
-        self,
-        x: Tensor,
-        xa: Optional[Tensor] = None,
-        mask: Optional[Tensor] = None,
-        kv_cache: Optional[dict] = None,
+            self,
+            x: Tensor,
+            xa: Optional[Tensor] = None,
+            mask: Optional[Tensor] = None,
+            kv_cache: Optional[dict] = None,
     ):
         q = self.query(x)
 
@@ -89,7 +86,7 @@ class MultiHeadAttention(nn.Module):
         return self.out(wv), qk
 
     def qkv_attention(
-        self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None
+            self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None
     ):
         n_batch, n_ctx, n_state = q.shape
         scale = (n_state // self.n_head) ** -0.25
@@ -125,11 +122,11 @@ class ResidualAttentionBlock(nn.Module):
         self.mlp_ln = LayerNorm(n_state)
 
     def forward(
-        self,
-        x: Tensor,
-        xa: Optional[Tensor] = None,
-        mask: Optional[Tensor] = None,
-        kv_cache: Optional[dict] = None,
+            self,
+            x: Tensor,
+            xa: Optional[Tensor] = None,
+            mask: Optional[Tensor] = None,
+            kv_cache: Optional[dict] = None,
     ):
         x = x + self.attn(self.attn_ln(x), mask=mask, kv_cache=kv_cache)[0]
         if self.cross_attn:
@@ -140,13 +137,13 @@ class ResidualAttentionBlock(nn.Module):
 
 class Encoder(nn.Module):
     def __init__(
-        self, n_mels: int, n_ctx: int, n_state: int, n_head: int, n_layer: int
+            self, n_mels: int, n_ctx: int, n_state: int, n_head: int, n_layer: int
     ):
         super().__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "")
         self.conv1 = Conv1d(n_mels, n_state, kernel_size=3, padding=1)
         self.conv2 = Conv1d(n_state, n_state, kernel_size=3, stride=2, padding=1)
-        self.register_buffer("positional_embedding", sinusoids(n_ctx, n_state))
-        #self.cls_token = nn.Parameter(torch.zeros(1, 1, n_state))
+        # self.cls_token = nn.Parameter(torch.zeros(1, 1, n_state))
 
         self.blocks: Iterable[ResidualAttentionBlock] = nn.ModuleList(
             [ResidualAttentionBlock(n_state, n_head) for _ in range(n_layer)]
@@ -159,13 +156,14 @@ class Encoder(nn.Module):
             the mel spectrogram of the audio
         """
         B = x.shape[0]
-        #cls_tokens = self.cls_token.expand(B, -1, -1)
+        # cls_tokens = self.cls_token.expand(B, -1, -1)
         x = F.gelu(self.conv1(x))
         x = F.gelu(self.conv2(x))
         x = x.permute(0, 2, 1)
-        #x = torch.cat([cls_tokens, x], dim=1)
-        assert x.shape[1:] == self.positional_embedding.shape, "incorrect audio shape"
-        x = (x + self.positional_embedding).to(x.dtype)
+        # x = torch.cat([cls_tokens, x], dim=1)
+        positional_embedding = sinusoids(x.shape[1], 768).to(self.device)
+        # assert x.shape[1:] == positional_embedding.shape, "incorrect audio shape"
+        x = (x + positional_embedding).to(x.dtype)
 
         for block in self.blocks:
             x = block(x)
@@ -176,12 +174,12 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     def __init__(
-        self, n_state: int, n_head: int, n_layer: int
+            self, n_state: int, n_head: int, n_layer: int
     ):
         super().__init__()
 
-        #self.token_embedding = nn.Embedding(n_vocab, n_state)
-        #self.positional_embedding = nn.Parameter(torch.empty(n_ctx, n_state))
+        # self.token_embedding = nn.Embedding(n_vocab, n_state)
+        # self.positional_embedding = nn.Parameter(torch.empty(n_ctx, n_state))
 
         self.blocks: Iterable[ResidualAttentionBlock] = nn.ModuleList(
             [
@@ -191,24 +189,24 @@ class Decoder(nn.Module):
         )
         self.ln = LayerNorm(n_state)
 
-        #mask = torch.empty(n_ctx, n_ctx).fill_(-np.inf).triu_(1)
-        #self.register_buffer("mask", mask, persistent=False)
+        # mask = torch.empty(n_ctx, n_ctx).fill_(-np.inf).triu_(1)
+        # self.register_buffer("mask", mask, persistent=False)
 
     def forward(self, x: Tensor, xa: Tensor, kv_cache: Optional[dict] = None):
         """
         x : image
         xa : audio
         """
-        
-        #x = x + self.positional_embedding[: x.shape[1]]
+
+        # x = x + self.positional_embedding[: x.shape[1]]
 
         for block in self.blocks:
             x = block(x, xa, kv_cache=kv_cache)
 
         x = self.ln(x)
-        #logits = (
+        # logits = (
         #    x @ torch.transpose(self.token_embedding.weight.to(x.dtype), 0, 1)
-        #).float()
+        # ).float()
 
         return x
 
@@ -217,4 +215,4 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     encoder = Encoder(n_mels=80, n_ctx=240, n_state=768, n_head=8, n_layer=6)
 
-    summary(encoder, [80, 480])
+    summary(encoder, [80, 10])

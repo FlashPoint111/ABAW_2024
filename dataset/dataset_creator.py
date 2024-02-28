@@ -27,7 +27,7 @@ def extract_audio(video_path: str, sampling_rate: int = 16000):
         .output("-", format="s16le", acodec="pcm_s16le", ac=1, ar=sampling_rate)
         .run(cmd=["ffmpeg", "-nostdin"], capture_stdout=True, capture_stderr=True, quiet=True)
     )
-    audio = np.frombuffer(audio, np.int16).astype(np.float32) * (1 / 32768.0)
+    audio = np.frombuffer(audio, np.int16).flatten().astype(np.float32) / 32768.0
     return audio
 
 

@@ -6,8 +6,9 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 from utils.randaugment import RandomAugment
 import torch.backends.cudnn as cudnn
+from dataset.video_process import custom_collate_fn
 
-import utils
+import utils.utils as utils
 from dataset.video_process import IterCreator
 from model.model import MultiModalModel
 from optim import create_optimizer
@@ -23,30 +24,27 @@ def train(model, data_loader, optimizer, epoch, warmup_steps, device, scheduler)
 
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=50, fmt='{value:.6f}'))
-    metric_logger.add_meter('loss_ita', utils.SmoothedValue(window_size=50, fmt='{value:.4f}'))
-    metric_logger.add_meter('loss_ms', utils.SmoothedValue(window_size=50, fmt='{value:.4f}'))
+    metric_logger.add_meter('loss', utils.SmoothedValue(window_size=50, fmt='{value:.4f}'))
 
     header = 'Train Epoch: [{}]'.format(epoch)
     print_freq = 50
     step_size = 100
     warmup_iterations = warmup_steps * step_size
 
-    for i, (image, audio, label) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    for i, sample in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         optimizer.zero_grad()
-        image = image.to(device, non_blocking=True)
-        audio = audio.to(device, non_blocking=True)
-        label = label.to(device, non_blocking=True)
+        image = sample["video"].to(device, non_blocking=True)
+        audio = sample["audio"].to(device, non_blocking=True)
+        label = sample["label"].to(device, non_blocking=True).long()
         if epoch > 0:
             alpha = 0.4
         else:
             alpha = 0.1
 
-        loss_ita, loss_ms = model(image, audio, label, alpha=alpha)
-        loss = loss_ita + loss_ms
+        loss = model(image, audio, label, alpha=alpha)
         loss.backward()
         optimizer.step()
-        metric_logger.update(loss_ita=loss_ita.item())
-        metric_logger.update(loss_ms=loss_ms.item())
+        metric_logger.update(loss_ita=loss.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         if epoch == 0 and i % step_size == 0 and i <= warmup_iterations:
             scheduler.step(i // step_size)
@@ -66,23 +64,22 @@ if __name__ == '__main__':
     warmup_steps = 1e-5
 
     print("Creating dataset")
-    dataset = 'train'
-    dataset = pd.read_csv(f'{dataset}.csv').values
-    video_path = [{"video_path":dataset[0][0], "label_path":dataset[0][1], "fps":30}]
+    with open('./config/train.json') as f:
+        configs = json.load(f)
     
     normalize = transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
     
     pretrain_transform = transforms.Compose([                        
-            transforms.RandomResizedCrop(224, scale=(0.2, 1.0), interpolation=Image.BICUBIC),
+            transforms.RandomResizedCrop(224, scale=(0.9, 1.0), interpolation=Image.BICUBIC),
             transforms.RandomHorizontalFlip(),
             RandomAugment(2, 7, isPIL=True, augs=['Identity','AutoContrast','Equalize','Brightness','Sharpness',
-                                              'ShearX', 'ShearY', 'TranslateX', 'TranslateY', 'Rotate']),
+                                                  'ShearX', 'ShearY', 'TranslateX', 'TranslateY', 'Rotate']),
             transforms.ToTensor(),
             normalize,
         ])    
 
-    dataset = IterCreator(video_path, pretrain_transform)
-    dataloader = DataLoader(dataset, batch_size=2)
+    dataset = IterCreator(configs, pretrain_transform)
+    dataloader = DataLoader(dataset, batch_size=4, collate_fn=custom_collate_fn)
 
     print("Creating model")
     model = MultiModalModel()

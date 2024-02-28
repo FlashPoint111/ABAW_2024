@@ -3,8 +3,8 @@ import torch.nn.functional as F
 from torch import nn
 from torchsummary import summary
 
-from Whisper import Encoder, Decoder
-from vit_clip import ViT_CLIP
+from .vit_clip import ViT_CLIP
+from .whisper import Encoder, Decoder
 
 
 class MultiModalModel(nn.Module):
@@ -38,14 +38,15 @@ class MultiModalModel(nn.Module):
                 param.requires_grad = False
 
         self.audio_encoder = Encoder(n_mels=n_mels, n_ctx=n_ctx, n_state=768, n_head=8, n_layer=6)
-        checkpoint_file = 'small.en.pt'
+        checkpoint_file = './pretrain/small.en.pt'
         with (open(checkpoint_file, "rb")) as fp:
             checkpoint = torch.load(fp)
         encoder_dict = {key.replace('encoder.', ''): value for key, value in checkpoint['model_state_dict'].items() if
                         'encoder' in key}
-        encoder_dict['positional_embedding'] = encoder_dict['positional_embedding'][:n_ctx, :]
         self.audio_encoder.load_state_dict(encoder_dict, strict=False)
-
+        for name, param in self.audio_encoder.named_parameters():
+            if 'positional_embedding' not in name and 'conv' not in name:
+                param.requires_grad = False
         self.decoder = Decoder(n_state=768, n_head=8, n_layer=6)
         # decoder_dict = {key.replace('decoder.', ''): value for key, value in checkpoint['model_state_dict'].items() if 'decoder' in key}
         # self.decoder.load_state_dict(decoder_dict, strict=False)
@@ -125,7 +126,8 @@ class MultiModalModel(nn.Module):
         fused_feat = self.decoder(image_embeds, audio_embeds)
         fc1 = F.relu(self.output_layer1(fused_feat))
         fc2 = F.relu(self.output_layer2(fc1))
-        output = torch.transpose(self.output_layer3(fc2), 1, 2)
+        fc3 = F.relu(self.output_layer3(fc2))
+        output = torch.transpose(fc3, 1, 2)
         # output = F.softmax(fc3, dim=2)
 
         loss = F.cross_entropy(output, label)
@@ -182,6 +184,6 @@ def concat_all_gather(tensor):
 if __name__ == '__main__':
     test = MultiModalModel()
     image = torch.zeros((2, 3, 32, 224, 224))
-    audio = torch.zeros((2, 80, 480))
+    audio = torch.zeros((2, 80, 20))
     label = torch.zeros((2, 32), dtype=torch.int64)
     summary(test, image, audio, label)
