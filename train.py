@@ -9,7 +9,7 @@ import torch.backends.cudnn as cudnn
 from dataset.video_process import custom_collate_fn
 
 import utils.utils as utils
-from dataset.video_process import IterCreator
+from dataset.video_process import ImageAudioDataset
 from model.model import MultiModalModel
 from optim import create_optimizer
 from scheduler import create_scheduler
@@ -78,8 +78,8 @@ if __name__ == '__main__':
             normalize,
         ])    
 
-    dataset = IterCreator(configs, pretrain_transform)
-    dataloader = DataLoader(dataset, batch_size=4, collate_fn=custom_collate_fn)
+    dataset = ImageAudioDataset(configs, pretrain_transform)
+    dataloader = DataLoader(dataset, batch_size=configs["batch_size"], collate_fn=custom_collate_fn)
 
     print("Creating model")
     model = MultiModalModel()
