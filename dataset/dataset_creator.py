@@ -75,7 +75,7 @@ if __name__ == '__main__':
     stride = config["stride"]
     if not os.path.exists(config["output_path"]):
         os.makedirs(config["output_path"])
-    count = 1
+    output_count = 0
 
     for sample in dataset:
         print(sample['video_path'])
@@ -85,14 +85,31 @@ if __name__ == '__main__':
         label = extract_label(sample['label_path'])
         fps = sample['fps']
         total_frames = sample['total_frame']
-        for i in range(0, len(image) - seq_len, stride):
-            start = img_idx[i]
-            end = img_idx[i + seq_len - 1]
-            imgs_sample = image[i: i + seq_len]
-            audio_sample = audio[
-                           int((start - 1) * (total_audio // total_frames)): int(end * (total_audio // total_frames))]
-            audio_sample = log_mel_spectrogram(torch.Tensor(audio_sample))
-            label_sample = [label[x - 1] for x in img_idx[i: i + seq_len]]
-            torch.save(({"video": imgs_sample, "audio": audio_sample, "label": label_sample}),
-                       os.path.join(config["output_path"], f"{count}.pth"))
+        actual_frames = len(img_idx)
+        i = 0
+        imgs_sample = []
+        audio_sample = []
+        label_sample = []
+        count = 0
+
+        while i < actual_frames:
+            if label[img_idx[i] - 1] == -1:
+                i += 1
+                continue
+            imgs_sample.append(image[i])
+            audio_sample.extend(audio[int(img_idx[i] * (total_audio // total_frames)): int(
+                (img_idx[i] + 1) * (total_audio // total_frames) - 1)])
+            label_sample.append(label[img_idx[i] - 1])
             count += 1
+            if count == 32:
+                audio_sample = log_mel_spectrogram(torch.Tensor(audio_sample))
+                torch.save(({"video": imgs_sample, "audio": audio_sample, "label": label_sample}),
+                           os.path.join(config["output_path"], f"{output_count}.pth"))
+                output_count += 1
+                count = 0
+                imgs_sample = []
+                audio_sample = []
+                label_sample = []
+                i += stride
+            else:
+                i += 1

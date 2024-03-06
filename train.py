@@ -44,7 +44,7 @@ def train(model, data_loader, optimizer, epoch, warmup_steps, device, scheduler)
         loss = model(image, audio, label, alpha=alpha)
         loss.backward()
         optimizer.step()
-        metric_logger.update(loss_ita=loss.item())
+        metric_logger.update(loss=loss.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         if epoch == 0 and i % step_size == 0 and i <= warmup_iterations:
             scheduler.step(i // step_size)

@@ -1,4 +1,4 @@
 {
   "dataset_path": "./dataset/train_set",
-  "batch_size": 16
+  "batch_size": 3
 }

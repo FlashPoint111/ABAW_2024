@@ -126,7 +126,7 @@ class MultiModalModel(nn.Module):
         fused_feat = self.decoder(image_embeds, audio_embeds)
         fc1 = F.relu(self.output_layer1(fused_feat))
         fc2 = F.relu(self.output_layer2(fc1))
-        fc3 = F.relu(self.output_layer3(fc2))
+        fc3 = self.output_layer3(fc2)
         output = torch.transpose(fc3, 1, 2)
         # output = F.softmax(fc3, dim=2)
 
